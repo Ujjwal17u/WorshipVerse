@@ -9,72 +9,16 @@ import {
   Heart,
   Menu,
   Music2,
-  Plus,
   Search,
-  Settings,
   Sparkles,
-  Upload,
   X,
 } from 'lucide-react'
+import { BrandMark } from '@/components/brand-mark'
+import { ThemeToggle } from '@/components/theme-toggle'
+import type { PublicSong as Song } from '@/types/song'
 
 type Category = 'All' | 'Praise' | 'Worship'
-type View = 'home' | 'praise' | 'worship' | 'favorites' | 'search' | 'admin'
-
-type Song = {
-  id: number
-  title: string
-  artist: string
-  category: Exclude<Category, 'All'>
-  featured?: boolean
-  lyrics: string[]
-}
-
-const songs: Song[] = [
-  {
-    id: 1,
-    title: 'Great Is Your Faithfulness',
-    artist: 'WorshipVerse Originals',
-    category: 'Worship',
-    featured: true,
-    lyrics: ['Morning by morning, new mercies I see', 'All I have needed, Your hand has provided', 'Great is Your faithfulness, Lord unto me', '', 'You never let go, You never grow weary', 'Your promise is steady, Your presence is near', 'Great is Your faithfulness, Lord unto me'],
-  },
-  {
-    id: 2,
-    title: 'Joy in the Morning',
-    artist: 'WorshipVerse Originals',
-    category: 'Praise',
-    featured: true,
-    lyrics: ['You turn my mourning into dancing', 'You place a song within my heart', 'Your joy is new with every morning', 'Your faithful love will never part', '', 'I will lift my voice and sing', 'You are good in everything'],
-  },
-  {
-    id: 3,
-    title: 'Here in Your Presence',
-    artist: 'WorshipVerse Originals',
-    category: 'Worship',
-    lyrics: ['Here in Your presence, I am made whole', 'Quiet my spirit, awaken my soul', 'There is no striving, there is no fear', 'Only Your goodness is drawing me near'],
-  },
-  {
-    id: 4,
-    title: 'Lift Every Voice',
-    artist: 'WorshipVerse Originals',
-    category: 'Praise',
-    lyrics: ['Lift every voice, let the heavens hear', 'Tell of the grace that has brought us here', 'With every breath, with every choice', 'We will praise You and lift our voice'],
-  },
-  {
-    id: 5,
-    title: 'Be Still and Know',
-    artist: 'WorshipVerse Originals',
-    category: 'Worship',
-    lyrics: ['Be still and know that I am God', 'Lay down the weight you carry', 'My peace will be your covering', 'My arms are strong and steady'],
-  },
-  {
-    id: 6,
-    title: 'Sing a New Song',
-    artist: 'WorshipVerse Originals',
-    category: 'Praise',
-    lyrics: ['Sing a new song to the One who saves', 'Let every nation know Your name', 'Your love is wider than the sea', 'Your grace has set us free'],
-  },
-]
+type View = 'home' | 'praise' | 'worship' | 'favorites' | 'search'
 
 function SongCard({ song, favorite, onFavorite, onOpen }: { song: Song; favorite: boolean; onFavorite: () => void; onOpen: () => void }) {
   return (
@@ -96,40 +40,56 @@ function SongCard({ song, favorite, onFavorite, onOpen }: { song: Song; favorite
   )
 }
 
-function BrandMark({ compact = false }: { compact?: boolean }) {
-  return (
-    <span className="flex items-center gap-3 text-left">
-      <span className="flex size-10 items-center justify-center rounded-xl bg-[#f3ead8] text-[#8a6a28]">
-        <BookOpen size={20} strokeWidth={1.75} />
-      </span>
-      <span>
-        <strong className="block text-[17px] font-semibold tracking-tight text-foreground">WorshipVerse</strong>
-        {!compact && (
-          <span className="mt-0.5 block text-[10px] font-medium tracking-[0.18em] text-muted-foreground uppercase">
-            Praise • Worship • Lyrics
-          </span>
-        )}
-      </span>
-    </span>
-  )
+function readFavoriteIds(raw: string | null): string[] {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.map((item) => String(item))
+  } catch {
+    return []
+  }
 }
 
 export default function Page() {
   const [view, setView] = useState<View>('home')
   const [category, setCategory] = useState<Category>('All')
   const [query, setQuery] = useState('')
-  const [favorites, setFavorites] = useState<number[]>([])
+  const [favorites, setFavorites] = useState<string[]>([])
+  const [songs, setSongs] = useState<Song[]>([])
+  const [loadingSongs, setLoadingSongs] = useState(true)
+  const [songsError, setSongsError] = useState<string | null>(null)
   const [selectedSong, setSelectedSong] = useState<Song | null>(null)
   const [fontSize, setFontSize] = useState<'sm' | 'md' | 'lg'>('md')
   const [mobileNav, setMobileNav] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    const saved = window.localStorage.getItem('worshipverse-favorites')
-    if (saved) setFavorites(JSON.parse(saved))
+    setFavorites(readFavoriteIds(window.localStorage.getItem('worshipverse-favorites')))
   }, [])
 
-  const toggleFavorite = (id: number) => {
+  useEffect(() => {
+    const load = async () => {
+      setLoadingSongs(true)
+      setSongsError(null)
+      try {
+        const response = await fetch('/api/songs?pageSize=200')
+        if (!response.ok) {
+          setSongsError('The song library is temporarily unavailable.')
+          return
+        }
+        const payload = (await response.json()) as { songs?: Song[] }
+        setSongs(payload.songs ?? [])
+      } catch {
+        setSongsError('The song library is temporarily unavailable.')
+      } finally {
+        setLoadingSongs(false)
+      }
+    }
+    void load()
+  }, [])
+
+  const toggleFavorite = (id: string) => {
     const next = favorites.includes(id) ? favorites.filter((item) => item !== id) : [...favorites, id]
     setFavorites(next)
     window.localStorage.setItem('worshipverse-favorites', JSON.stringify(next))
@@ -181,7 +141,7 @@ export default function Page() {
         <nav className="hidden items-center gap-1 md:flex" aria-label="Main navigation">
           <button
             onClick={() => goTo('praise')}
-            className={`flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium transition ${view === 'praise' ? 'text-foreground' : 'text-neutral-700 hover:text-foreground'}`}
+            className={`flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium transition ${view === 'praise' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
           >
             <Sparkles size={16} strokeWidth={1.75} />
             <span className="relative pb-1">
@@ -191,7 +151,7 @@ export default function Page() {
           </button>
           <button
             onClick={() => goTo('worship')}
-            className={`flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium transition ${view === 'worship' ? 'text-foreground' : 'text-neutral-700 hover:text-foreground'}`}
+            className={`flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium transition ${view === 'worship' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
           >
             <Music2 size={16} strokeWidth={1.75} />
             <span className="relative pb-1">
@@ -201,7 +161,7 @@ export default function Page() {
           </button>
           <button
             onClick={() => goTo('favorites')}
-            className={`flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium transition ${view === 'favorites' ? 'text-foreground' : 'text-neutral-700 hover:text-foreground'}`}
+            className={`flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium transition ${view === 'favorites' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
           >
             <Heart size={16} strokeWidth={1.75} /> Favorites
           </button>
@@ -210,15 +170,19 @@ export default function Page() {
               goTo('search')
               window.setTimeout(() => searchRef.current?.focus(), 0)
             }}
-            className="ml-1 rounded-full p-2 text-neutral-700 transition hover:bg-secondary hover:text-foreground"
+            className="ml-1 rounded-full p-2 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
             aria-label="Search songs"
           >
             <Search size={18} strokeWidth={1.75} />
           </button>
+          <ThemeToggle />
         </nav>
-        <button onClick={() => setMobileNav(!mobileNav)} className="rounded-full p-2 text-muted-foreground hover:bg-secondary md:hidden" aria-label="Toggle navigation">
-          {mobileNav ? <X size={20} /> : <Menu size={20} />}
-        </button>
+        <div className="flex items-center gap-1 md:hidden">
+          <ThemeToggle />
+          <button onClick={() => setMobileNav(!mobileNav)} className="rounded-full p-2 text-muted-foreground hover:bg-secondary" aria-label="Toggle navigation">
+            {mobileNav ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
       </div>
       {mobileNav && (
         <nav className="flex flex-col gap-1 border-t border-border px-5 py-3 md:hidden">
@@ -247,9 +211,12 @@ export default function Page() {
             <button onClick={() => setSelectedSong(null)} className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
               <ArrowLeft size={18} /> Back to library
             </button>
-            <button onClick={() => toggleFavorite(selectedSong.id)} className="flex items-center gap-2 rounded-full border border-border px-3 py-2 text-sm font-medium hover:bg-secondary" aria-label="Toggle favorite">
-              <Heart size={16} className={favorites.includes(selectedSong.id) ? 'fill-accent text-accent' : ''} /> {favorites.includes(selectedSong.id) ? 'Saved' : 'Save'}
-            </button>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <button onClick={() => toggleFavorite(selectedSong.id)} className="flex items-center gap-2 rounded-full border border-border px-3 py-2 text-sm font-medium hover:bg-secondary" aria-label="Toggle favorite">
+                <Heart size={16} className={favorites.includes(selectedSong.id) ? 'fill-accent text-accent' : ''} /> {favorites.includes(selectedSong.id) ? 'Saved' : 'Save'}
+              </button>
+            </div>
           </div>
         </header>
         <main className="mx-auto max-w-3xl px-5 py-12 lg:px-8">
@@ -284,7 +251,7 @@ export default function Page() {
         {header}
         <main className="flex flex-1 flex-col items-center justify-center px-5 pb-24 pt-8">
           <div className="flex w-full max-w-2xl flex-col items-center text-center">
-            <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#ead9a8] bg-[#fbf6ea] px-3.5 py-1.5 text-[11px] font-medium tracking-[0.14em] text-[#9a7a32] uppercase">
+            <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#ead9a8] bg-[#fbf6ea] px-3.5 py-1.5 text-[11px] font-medium tracking-[0.14em] text-[#9a7a32] uppercase dark:border-accent/30 dark:bg-secondary dark:text-accent">
               <BookOpen size={13} strokeWidth={1.75} />
               Praise • Worship • Lyrics
             </span>
@@ -292,8 +259,8 @@ export default function Page() {
             <p className="mt-5 max-w-xl text-pretty text-[15px] leading-7 text-muted-foreground sm:text-base">
               A simple, serene sanctuary for church lyrics. Quickly find, open, and read praise and worship song lyrics during church services and personal devotion.
             </p>
-            <label className="mt-9 flex w-full max-w-xl items-center gap-3 rounded-full border border-neutral-200 bg-white px-5 py-3.5 shadow-[0_1px_2px_rgba(0,0,0,0.03)] focus-within:border-accent/50 focus-within:ring-4 focus-within:ring-accent/10">
-              <Search size={18} className="shrink-0 text-neutral-400" strokeWidth={1.75} />
+            <label className="mt-9 flex w-full max-w-xl items-center gap-3 rounded-full border border-border bg-card px-5 py-3.5 shadow-[0_1px_2px_rgba(0,0,0,0.03)] focus-within:border-accent/50 focus-within:ring-4 focus-within:ring-accent/10">
+              <Search size={18} className="shrink-0 text-muted-foreground" strokeWidth={1.75} />
               <input
                 ref={searchRef}
                 value={query}
@@ -302,7 +269,7 @@ export default function Page() {
                   if (event.target.value) setView('search')
                 }}
                 placeholder="Search songs by title or lyrics..."
-                className="w-full bg-transparent text-[15px] text-foreground outline-none placeholder:text-neutral-400"
+                className="w-full bg-transparent text-[15px] text-foreground outline-none placeholder:text-muted-foreground"
                 aria-label="Search songs"
               />
             </label>
@@ -310,14 +277,14 @@ export default function Page() {
               <span className="mr-1 text-sm text-muted-foreground">Quick explore:</span>
               <button
                 onClick={() => goTo('praise')}
-                className="inline-flex items-center gap-2 rounded-full border border-[#ead9a8] bg-[#fbf6ea] px-4 py-2 text-sm font-medium text-[#5c4a1f] transition hover:bg-[#f3ead8]"
+                className="inline-flex items-center gap-2 rounded-full border border-[#ead9a8] bg-[#fbf6ea] px-4 py-2 text-sm font-medium text-[#5c4a1f] transition hover:bg-[#f3ead8] dark:border-accent/30 dark:bg-secondary dark:text-accent dark:hover:bg-muted"
               >
                 <Sparkles size={15} strokeWidth={1.75} />
                 Praise Songs
               </button>
               <button
                 onClick={() => goTo('worship')}
-                className="inline-flex items-center gap-2 rounded-full border border-[#d7dcef] bg-[#eef0f8] px-4 py-2 text-sm font-medium text-[#3d4566] transition hover:bg-[#e4e8f4]"
+                className="inline-flex items-center gap-2 rounded-full border border-[#d7dcef] bg-[#eef0f8] px-4 py-2 text-sm font-medium text-[#3d4566] transition hover:bg-[#e4e8f4] dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-muted"
               >
                 <Music2 size={15} strokeWidth={1.75} />
                 Worship Songs
