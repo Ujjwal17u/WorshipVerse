@@ -7,10 +7,14 @@ import {
   ChevronRight,
   FileText,
   Heart,
+  LayoutDashboard,
   Menu,
   Music2,
+  Plus,
   Search,
+  Settings,
   Sparkles,
+  Upload,
   X,
 } from 'lucide-react'
 import { BrandMark } from '@/components/brand-mark'
@@ -18,7 +22,7 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import type { PublicSong as Song } from '@/types/song'
 
 type Category = 'All' | 'Praise' | 'Worship'
-type View = 'home' | 'praise' | 'worship' | 'favorites' | 'search'
+type View = 'home' | 'praise' | 'worship' | 'favorites' | 'search' | 'admin'
 
 function SongCard({ song, favorite, onFavorite, onOpen }: { song: Song; favorite: boolean; onFavorite: () => void; onOpen: () => void }) {
   return (
@@ -109,6 +113,11 @@ export default function Page() {
     if (next !== 'search') setQuery('')
   }
 
+  const toggleAdmin = () => {
+    setView((prev) => (prev === 'admin' ? 'home' : 'admin'))
+    setMobileNav(false)
+  }
+
   const filteredSongs = useMemo(() => {
     const normalized = query.trim().toLowerCase()
     return songs.filter((song) => {
@@ -118,7 +127,14 @@ export default function Page() {
       const matchesQuery = !normalized || `${song.title} ${song.artist} ${song.lyrics.join(' ')}`.toLowerCase().includes(normalized)
       return matchesCategory && matchesView && matchesFavorites && matchesQuery
     })
-  }, [category, favorites, query, view])
+  }, [category, favorites, query, view, songs])
+
+  useEffect(() => {
+    if (view === 'search') {
+      const id = window.setTimeout(() => searchRef.current?.focus(), 0)
+      return () => window.clearTimeout(id)
+    }
+  }, [view])
 
   const openSong = (song: Song) => setSelectedSong(song)
   const pageTitle =
@@ -130,7 +146,9 @@ export default function Page() {
           ? 'Search songs'
           : view === 'praise'
             ? 'Praise songs'
-            : 'Worship songs'
+            : view === 'worship'
+              ? 'Worship songs'
+              : ''
 
   const header = (
     <header className="sticky top-0 z-10 bg-background/90 backdrop-blur-md">
@@ -166,14 +184,18 @@ export default function Page() {
             <Heart size={16} strokeWidth={1.75} /> Favorites
           </button>
           <button
-            onClick={() => {
-              goTo('search')
-              window.setTimeout(() => searchRef.current?.focus(), 0)
-            }}
+            onClick={() => goTo('search')}
             className="ml-1 rounded-full p-2 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
             aria-label="Search songs"
           >
             <Search size={18} strokeWidth={1.75} />
+          </button>
+          <button
+            onClick={toggleAdmin}
+            className={`rounded-full p-2 transition ${view === 'admin' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'}`}
+            aria-label="Admin dashboard"
+          >
+            <LayoutDashboard size={18} strokeWidth={1.75} />
           </button>
           <ThemeToggle />
         </nav>
@@ -197,6 +219,9 @@ export default function Page() {
           </button>
           <button onClick={() => goTo('search')} className="flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-muted-foreground hover:bg-secondary">
             <Search size={17} /> Search
+          </button>
+          <button onClick={toggleAdmin} className="flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-muted-foreground hover:bg-secondary">
+            <LayoutDashboard size={17} /> Admin dashboard
           </button>
         </nav>
       )}
@@ -262,7 +287,6 @@ export default function Page() {
             <label className="mt-9 flex w-full max-w-xl items-center gap-3 rounded-full border border-border bg-card px-5 py-3.5 shadow-[0_1px_2px_rgba(0,0,0,0.03)] focus-within:border-accent/50 focus-within:ring-4 focus-within:ring-accent/10">
               <Search size={18} className="shrink-0 text-muted-foreground" strokeWidth={1.75} />
               <input
-                ref={searchRef}
                 value={query}
                 onChange={(event) => {
                   setQuery(event.target.value)
@@ -308,7 +332,7 @@ export default function Page() {
       {header}
       <main className="mx-auto max-w-6xl px-5 py-10 lg:px-8 lg:py-12">
         {view === 'admin' ? (
-          <AdminPreview />
+          <AdminPreview songs={songs} favorites={favorites} />
         ) : (
           <>
             <section className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
@@ -318,8 +342,8 @@ export default function Page() {
                   {filteredSongs.length} {filteredSongs.length === 1 ? 'song' : 'songs'}
                 </p>
               </div>
-              <label className="flex w-full max-w-md items-center gap-3 rounded-full border border-neutral-200 bg-white px-4 py-2.5 focus-within:border-accent/50 focus-within:ring-4 focus-within:ring-accent/10">
-                <Search size={16} className="shrink-0 text-neutral-400" />
+              <label className="flex w-full max-w-md items-center gap-3 rounded-full border border-border bg-card px-4 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.03)] focus-within:border-accent/50 focus-within:ring-4 focus-within:ring-accent/10">
+                <Search size={16} className="shrink-0 text-muted-foreground" strokeWidth={1.75} />
                 <input
                   ref={searchRef}
                   value={query}
@@ -328,7 +352,7 @@ export default function Page() {
                     if (event.target.value) setView('search')
                   }}
                   placeholder="Search songs by title or lyrics..."
-                  className="w-full bg-transparent text-sm outline-none placeholder:text-neutral-400"
+                  className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
                   aria-label="Search songs"
                 />
               </label>
@@ -358,12 +382,12 @@ export default function Page() {
   )
 }
 
-function AdminPreview() {
+function AdminPreview({ songs, favorites }: { songs: Song[]; favorites: string[] }) {
   const stats = [
-    { label: 'Total songs', value: '6' },
-    { label: 'Praise songs', value: '3' },
-    { label: 'Worship songs', value: '3' },
-    { label: 'Favorites', value: '0' },
+    { label: 'Total songs', value: String(songs.length) },
+    { label: 'Praise songs', value: String(songs.filter((s) => s.category === 'Praise').length) },
+    { label: 'Worship songs', value: String(songs.filter((s) => s.category === 'Worship').length) },
+    { label: 'Favorites', value: String(favorites.length) },
   ]
   return (
     <div>
@@ -404,9 +428,9 @@ function AdminPreview() {
                     <Music2 size={16} />
                   </span>
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{song.title}</p>
+                    <p className="truncate text-sm font-medium">{song.title || '(Untitled)'}</p>
                     <p className="text-xs text-muted-foreground">
-                      {song.category} · {song.artist}
+                      {song.category} · {song.artist || 'Unknown'}
                     </p>
                   </div>
                 </div>
@@ -425,7 +449,7 @@ function AdminPreview() {
           <div className="rounded-2xl bg-secondary p-5">
             <FileText className="mb-4 text-foreground" size={21} />
             <h3 className="text-base">CSV format</h3>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">Use columns for title, artist, category, and lyrics.</p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">Use columns: title, artist, category, and lyrics.</p>
           </div>
         </aside>
       </div>
