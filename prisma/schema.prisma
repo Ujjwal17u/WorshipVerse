@@ -1,0 +1,29 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum SongCategory {
+  PRAISE
+  WORSHIP
+}
+
+model Song {
+  id        String       @id @default(cuid())
+  title     String
+  titleNorm String
+  category  SongCategory
+  lyrics    String       @db.Text
+  artist    String       @default("WorshipVerse Originals")
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@unique([titleNorm, category])
+  @@index([category])
+  @@index([title])
+  @@index([titleNorm])
+}
