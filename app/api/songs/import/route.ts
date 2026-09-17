@@ -67,6 +67,11 @@ export async function POST(request: NextRequest) {
         category?: string
         lyrics?: string
         status?: string
+        duplicateOf?: 'file' | 'database'
+      }
+      if (source.status === 'duplicate' && source.duplicateOf === 'file') {
+        skipped += 1
+        return []
       }
       const input = previewRowToInput({
         rowNumber: source.rowNumber ?? index + 2,
