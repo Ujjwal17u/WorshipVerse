@@ -6,6 +6,7 @@ export type PublicSong = {
   artist: string
   category: PublicCategory
   lyrics: string[]
+  featured?: boolean
 }
 
 export type AdminSong = PublicSong & {
