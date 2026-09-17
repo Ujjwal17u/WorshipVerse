@@ -182,18 +182,36 @@ function readFavoriteIds(raw: string | null): string[] {
 
 function LightSpecks({ count = 24, seed = 0 }: { count?: number; seed?: number }) {
   const specks = useMemo(() => {
-    const result: { left: number; size: number; duration: number; delay: number; jitter: number }[] = []
+    const result: {
+      left: string
+      size: string
+      height: string
+      animationDuration: string
+      animationDelay: string
+      transform: string
+    }[] = []
+    const toFixed = (n: number, d = 4) => {
+      const p = Math.pow(10, d)
+      return (Math.round(n * p) / p).toString()
+    }
+    const rand = (n: number, i: number) => {
+      const x = Math.sin((seed + i + 1) * 9999 + n * 17) * 10000
+      return x - Math.floor(x)
+    }
     for (let i = 0; i < count; i++) {
-      const rand = (n: number) => {
-        const x = Math.sin((seed + i + 1) * 9999 + n * 17) * 10000
-        return x - Math.floor(x)
-      }
+      const left = toFixed(rand(1, i) * 100, 4) + '%'
+      const sizeInt = 2 + Math.floor(rand(2, i) * 5)
+      const size = sizeInt.toString() + 'px'
+      const duration = toFixed(14 + rand(3, i) * 22, 3) + 's'
+      const delay = toFixed(rand(4, i) * -28, 3) + 's'
+      const jitterPx = toFixed((rand(5, i) * 0.8 - 0.4) * 20, 3) + 'px'
       result.push({
-        left: rand(1) * 100,
-        size: 2 + Math.floor(rand(2) * 5),
-        duration: 14 + rand(3) * 22,
-        delay: rand(4) * -28,
-        jitter: rand(5) * 0.8 - 0.4,
+        left,
+        size,
+        height: size,
+        animationDuration: duration,
+        animationDelay: delay,
+        transform: `translateX(${jitterPx})`,
       })
     }
     return result
@@ -201,18 +219,7 @@ function LightSpecks({ count = 24, seed = 0 }: { count?: number; seed?: number }
   return (
     <div className="wv-light-specks wv-light-specks-light dark:wv-light-specks">
       {specks.map((s, i) => (
-        <span
-          key={i}
-          className="speck"
-          style={{
-            left: `${s.left}%`,
-            width: `${s.size}px`,
-            height: `${s.size}px`,
-            animationDuration: `${s.duration}s`,
-            animationDelay: `${s.delay}s`,
-            transform: `translateX(${s.jitter * 20}px)`,
-          }}
-        />
+        <span key={i} className="speck" style={s} />
       ))}
     </div>
   )
@@ -278,9 +285,16 @@ export default function Page() {
   const [mobileNav, setMobileNav] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
 
-  const [heroVerse] = useState(() => bibleVerses[Math.floor(Math.random() * bibleVerses.length)])
+  const heroVerse = useMemo(() => {
+    const seed = (typeof window !== 'undefined' ? 0 : 20240917) + bibleVerses.length
+    const pick = Math.floor(Math.abs(Math.sin(seed * 999) * 10000)) % bibleVerses.length
+    return bibleVerses[pick]
+  }, [])
+
+  const BUILD_YEAR = 2026
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
     setFavorites(readFavoriteIds(window.localStorage.getItem('worshipverse-favorites')))
   }, [])
 
@@ -308,7 +322,9 @@ export default function Page() {
   const toggleFavorite = (id: string) => {
     const next = favorites.includes(id) ? favorites.filter((item) => item !== id) : [...favorites, id]
     setFavorites(next)
-    window.localStorage.setItem('worshipverse-favorites', JSON.stringify(next))
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('worshipverse-favorites', JSON.stringify(next))
+    }
   }
 
   const goHome = () => {
@@ -323,7 +339,9 @@ export default function Page() {
     setCategory(next === 'praise' ? 'Praise' : next === 'worship' ? 'Worship' : 'All')
     setMobileNav(false)
     if (next !== 'search') setQuery('')
-    if (next === 'search') window.setTimeout(() => searchRef.current?.focus(), 50)
+    if (next === 'search' && typeof window !== 'undefined') {
+      window.setTimeout(() => searchRef.current?.focus(), 50)
+    }
   }
 
   const toggleAdmin = () => {
@@ -342,7 +360,13 @@ export default function Page() {
     })
   }, [category, favorites, query, view, songs])
 
-  const featuredSongs = useMemo(() => songs.filter((s) => s.featured || songs.indexOf(s) < 3).slice(0, 6), [songs])
+  const featuredSongs = useMemo(() => {
+    const featured = songs.filter((s) => s.featured)
+    if (featured.length >= 6) return featured.slice(0, 6)
+    const seen = new Set(featured.map((s) => s.id))
+    const rest = songs.filter((s) => !seen.has(s.id)).slice(0, 6 - featured.length)
+    return [...featured, ...rest]
+  }, [songs])
   const praiseSongs = useMemo(() => songs.filter((s) => s.category === 'Praise').slice(0, 8), [songs])
   const worshipSongs = useMemo(() => songs.filter((s) => s.category === 'Worship').slice(0, 8), [songs])
   const favoriteSongs = useMemo(() => songs.filter((s) => favorites.includes(s.id)), [songs, favorites])
@@ -541,7 +565,13 @@ export default function Page() {
         }`}
       >
         <div className="flex items-center justify-between px-5 py-4">
-          <button onClick={goHome} className="rounded-xl focus-visible:outline-2 focus-visible:outline-ring" onClickCapture={() => setMobileNav(false)}>
+          <button
+            onClick={() => {
+              goHome()
+              setMobileNav(false)
+            }}
+            className="rounded-xl focus-visible:outline-2 focus-visible:outline-ring"
+          >
             <BrandMark compact />
           </button>
           <button onClick={() => setMobileNav(false)} className="rounded-full p-2 text-muted-foreground hover:bg-secondary" aria-label="Close menu">
@@ -839,9 +869,9 @@ export default function Page() {
 
       <footer className="border-t border-border/60 px-5 py-8 sm:px-6 lg:px-10">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 text-xs text-muted-foreground sm:flex-row">
-          <span>© {new Date().getFullYear()} WorshipVerse · A simple place for songs of faith.</span>
+          <span>© {BUILD_YEAR} WorshipVerse · A simple place for songs of faith.</span>
           <span className="flex items-center gap-2">
-            <Sparkles size={12} className="text-accent" /> Made with devotion for the global church.
+            <Sparkles size={12} className="text-accent" /> Made by ANIKET with devotion for the global church.
           </span>
         </div>
       </footer>
