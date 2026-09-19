@@ -1,12 +1,10 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { toAdminSong, toPublicSong } from '@/lib/songs'
-import { jsonError, parseCategory } from '@/lib/validation'
-import type { SongCategory } from '@prisma/client'
+import { jsonError } from '@/lib/validation'
 
 type ListOptions = {
   search?: string | null
-  category?: string | null
   page?: number
   pageSize?: number
   admin?: boolean
@@ -14,17 +12,14 @@ type ListOptions = {
 
 export async function listSongs(options: ListOptions = {}) {
   const search = options.search?.trim()
-  const category = options.category ? parseCategory(options.category) : null
   const page = Math.max(1, options.page ?? 1)
   const pageSize = Math.min(100, Math.max(1, options.pageSize ?? 100))
 
   const where: Prisma.SongWhereInput = {}
-  if (category) where.category = category
   if (search) {
     where.OR = [
       { title: { contains: search } },
       { lyrics: { contains: search } },
-      { artist: { contains: search } },
     ]
   }
 
@@ -52,18 +47,13 @@ export async function getSongById(id: string) {
 }
 
 export async function getSongCounts() {
-  const [total, praise, worship] = await prisma.$transaction([
-    prisma.song.count(),
-    prisma.song.count({ where: { category: 'PRAISE' } }),
-    prisma.song.count({ where: { category: 'WORSHIP' } }),
-  ])
-  return { total, praise, worship }
+  return { total: await prisma.song.count() }
 }
 
 export function handlePrismaError(error: unknown) {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     if (error.code === 'P2002') {
-      return jsonError('A song with this title and category already exists.', 409)
+      return jsonError('A song with this title already exists.', 409)
     }
     if (error.code === 'P2025') {
       return jsonError('Song not found.', 404)
@@ -79,4 +69,3 @@ export function isValidSongId(id: string) {
   return typeof id === 'string' && id.length > 0 && id.length < 64
 }
 
-export type { SongCategory }

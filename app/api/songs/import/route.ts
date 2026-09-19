@@ -1,10 +1,9 @@
 import { NextRequest } from 'next/server'
 import { requireAdmin } from '@/lib/auth'
+import { parseSongsPdf } from '@/lib/pdf'
 import { prisma } from '@/lib/prisma'
-import { buildCsvPreview, parseSongsCsv, previewRowToInput } from '@/lib/csv'
 import { handlePrismaError } from '@/lib/song-service'
-import { jsonError } from '@/lib/validation'
-import type { DuplicateMode } from '@/types/song'
+import { jsonError, validateSongInput } from '@/lib/validation'
 
 export async function POST(request: NextRequest) {
   const unauthorized = await requireAdmin()
@@ -17,14 +16,17 @@ export async function POST(request: NextRequest) {
       const form = await request.formData()
       const file = form.get('file')
       if (!(file instanceof File)) {
-        return jsonError('Please choose a CSV file.', 400)
+        return jsonError('Please choose a PDF file.', 400)
       }
-      if (!file.name.toLowerCase().endsWith('.csv')) {
-        return jsonError('Please upload a .csv file.', 400)
+      if (!file.name.toLowerCase().endsWith('.pdf') || file.type && file.type !== 'application/pdf') {
+        return jsonError('Unsupported file. Please upload a PDF file.', 400)
       }
-
-      const text = await file.text()
-      const parsed = parseSongsCsv(text)
+      if (file.size === 0 || file.size > 20 * 1024 * 1024) {
+        return jsonError('PDF files must be between 1 byte and 20 MB.', 400)
+      }
+      const parsed = await parseSongsPdf(Buffer.from(await file.arrayBuffer()))
+      if (parsed.error) return jsonError(parsed.error, 400)
+      return Response.json(parsed.preview)
       if (parsed.error) return jsonError(parsed.error, 400)
 
       const existing = await prisma.song.findMany({
@@ -34,107 +36,42 @@ export async function POST(request: NextRequest) {
       return Response.json(preview)
     }
 
-    const body = (await request.json()) as {
-      confirm?: boolean
-      duplicateMode?: DuplicateMode
-      rows?: unknown
-    }
-
-    if (!body.confirm || !Array.isArray(body.rows)) {
+    const body = (await request.json()) as { confirm?: boolean; duplicateMode?: 'skip' | 'update'; songs?: unknown }
+    if (!body.confirm || !Array.isArray(body.songs)) {
       return jsonError('Import confirmation payload is invalid.', 400)
     }
-
-    const duplicateMode: DuplicateMode = body.duplicateMode === 'update' ? 'update' : 'skip'
-    const existing = await prisma.song.findMany({
-      select: { id: true, titleNorm: true, category: true },
-    })
-    const existingMap = new Map(existing.map((song) => [`${song.titleNorm}::${song.category}`, song.id]))
 
     let imported = 0
     let skipped = 0
     let failed = 0
-    const failures: Array<{ rowNumber?: number; title?: string; message: string }> = []
-
-    const prepared = body.rows.flatMap((row, index) => {
-      if (!row || typeof row !== 'object') {
+    const failures: Array<{ title?: string; message: string }> = []
+    for (const rawSong of body.songs) {
+      if (!rawSong || typeof rawSong !== 'object') {
         failed += 1
-        failures.push({ message: `Row ${index + 1} is invalid.` })
-        return []
+        failures.push({ message: 'An extracted song is invalid.' })
+        continue
       }
-      const source = row as {
-        rowNumber?: number
-        title?: string
-        category?: string
-        lyrics?: string
-        status?: string
-        duplicateOf?: 'file' | 'database'
-      }
-      if (source.status === 'duplicate' && source.duplicateOf === 'file') {
-        skipped += 1
-        return []
-      }
-      const input = previewRowToInput({
-        rowNumber: source.rowNumber ?? index + 2,
-        title: String(source.title ?? ''),
-        category: String(source.category ?? ''),
-        lyrics: String(source.lyrics ?? ''),
-        status: 'valid',
-        errors: [],
-      })
-      if (!input) {
+      const source = rawSong as { title?: unknown; lyrics?: unknown; status?: string }
+      const { data } = validateSongInput({ title: source.title, lyrics: source.lyrics })
+      if (!data || source.status === 'invalid') {
         failed += 1
-        failures.push({
-          rowNumber: source.rowNumber,
-          title: source.title,
-          message: 'Invalid title, category, or lyrics.',
-        })
-        return []
+        failures.push({ title: typeof source.title === 'string' ? source.title : undefined, message: 'Title and lyrics are required.' })
+        continue
       }
-      return [{ input, rowNumber: source.rowNumber }]
-    })
-
-    const chunkSize = 50
-    for (let i = 0; i < prepared.length; i += chunkSize) {
-      const chunk = prepared.slice(i, i + chunkSize)
       try {
-        await prisma.$transaction(async (tx) => {
-          for (const item of chunk) {
-            const key = `${item.input.titleNorm}::${item.input.category}`
-            const existingId = existingMap.get(key)
-            if (existingId) {
-              if (duplicateMode === 'update') {
-                await tx.song.update({
-                  where: { id: existingId },
-                  data: {
-                    title: item.input.title,
-                    titleNorm: item.input.titleNorm,
-                    lyrics: item.input.lyrics,
-                    artist: item.input.artist,
-                  },
-                })
-                imported += 1
-              } else {
-                skipped += 1
-              }
-              continue
-            }
-
-            const created = await tx.song.create({
-              data: {
-                title: item.input.title,
-                titleNorm: item.input.titleNorm,
-                category: item.input.category,
-                lyrics: item.input.lyrics,
-                artist: item.input.artist,
-              },
-            })
-            existingMap.set(key, created.id)
+        const existing = await prisma.song.findUnique({ where: { titleNorm: data.titleNorm }, select: { id: true } })
+        if (existing) {
+          if (body.duplicateMode === 'update') {
+            await prisma.song.update({ where: { id: existing.id }, data })
             imported += 1
-          }
-        })
+          } else skipped += 1
+        } else {
+          await prisma.song.create({ data })
+          imported += 1
+        }
       } catch {
-        failed += chunk.length
-        failures.push({ message: 'A batch of songs could not be imported.' })
+        failed += 1
+        failures.push({ title: data.title, message: 'This song could not be saved.' })
       }
     }
 

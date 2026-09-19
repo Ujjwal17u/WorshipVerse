@@ -68,7 +68,7 @@ export default function EditSongPage() {
     <div>
       <h1 className="mb-6 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">Edit song</h1>
       <SongForm
-        initial={{ title: song.title, category: song.category, lyrics: song.lyrics.join('\n') }}
+        initial={{ title: song.title, lyrics: song.lyrics.join('\n') }}
         submitLabel="Save changes"
         pending={pending}
         error={error}

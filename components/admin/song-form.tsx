@@ -1,11 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import type { PublicCategory } from '@/types/song'
-
 export type SongFormValue = {
   title: string
-  category: PublicCategory
   lyrics: string
 }
 
@@ -23,7 +20,6 @@ export function SongForm({
   onSubmit: (value: SongFormValue) => void
 }) {
   const [title, setTitle] = useState(initial?.title ?? '')
-  const [category, setCategory] = useState<PublicCategory>(initial?.category ?? 'Praise')
   const [lyrics, setLyrics] = useState(initial?.lyrics ?? '')
 
   return (
@@ -31,7 +27,7 @@ export function SongForm({
       className="rounded-2xl border border-border bg-card p-5 sm:p-6"
       onSubmit={(event) => {
         event.preventDefault()
-        onSubmit({ title, category, lyrics })
+        onSubmit({ title, lyrics })
       }}
     >
       {error && (
@@ -45,17 +41,6 @@ export function SongForm({
           required
           className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-accent/50 focus:ring-4 focus:ring-accent/10"
         />
-      </label>
-      <label className="mb-4 block">
-        <span className="mb-2 block text-sm font-medium text-foreground">Category</span>
-        <select
-          value={category}
-          onChange={(event) => setCategory(event.target.value as PublicCategory)}
-          className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-accent/50 focus:ring-4 focus:ring-accent/10"
-        >
-          <option value="Praise">Praise</option>
-          <option value="Worship">Worship</option>
-        </select>
       </label>
       <label className="mb-6 block">
         <span className="mb-2 block text-sm font-medium text-foreground">Lyrics</span>

@@ -48,9 +48,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       data: {
         title: data.title,
         titleNorm: data.titleNorm,
-        category: data.category,
         lyrics: data.lyrics,
-        artist: data.artist,
       },
     })
     return Response.json({ song: toAdminSong(song) })

@@ -17,7 +17,6 @@ export async function GET(request: NextRequest) {
     const pageSize = Number(searchParams.get('pageSize') ?? '200')
     const result = await listSongs({
       search: searchParams.get('search'),
-      category: searchParams.get('category'),
       page: Number.isFinite(page) ? page : 1,
       pageSize: Number.isFinite(pageSize) ? pageSize : 200,
       admin: searchParams.get('admin') === '1',
@@ -49,9 +48,7 @@ export async function POST(request: NextRequest) {
       data: {
         title: data.title,
         titleNorm: data.titleNorm,
-        category: data.category,
         lyrics: data.lyrics,
-        artist: data.artist,
       },
     })
     return Response.json({ song: toAdminSong(song) }, { status: 201 })
