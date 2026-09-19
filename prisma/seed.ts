@@ -1,4 +1,4 @@
-import { PrismaClient, SongCategory } from '@prisma/client'
+import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
@@ -23,30 +23,25 @@ Verse 2
 `
 
 const demoSongs = [
-  { title: 'Demo Praise Song', category: SongCategory.PRAISE },
-  { title: 'Demo Worship Song', category: SongCategory.WORSHIP },
-  { title: 'Demo Morning Praise', category: SongCategory.PRAISE },
-  { title: 'Demo Quiet Worship', category: SongCategory.WORSHIP },
-  { title: 'Demo Gathering Song', category: SongCategory.PRAISE },
-  { title: 'Demo Evening Worship', category: SongCategory.WORSHIP },
+  { title: 'Demo Praise Song' },
+  { title: 'Demo Worship Song' },
+  { title: 'Demo Morning Praise' },
+  { title: 'Demo Quiet Worship' },
+  { title: 'Demo Gathering Song' },
+  { title: 'Demo Evening Worship' },
 ]
 
 async function main() {
   for (const song of demoSongs) {
     await prisma.song.upsert({
       where: {
-        titleNorm_category: {
-          titleNorm: normalizeTitle(song.title),
-          category: song.category,
-        },
+        titleNorm: normalizeTitle(song.title),
       },
       update: {},
       create: {
         title: song.title,
         titleNorm: normalizeTitle(song.title),
-        category: song.category,
         lyrics: DEMO_LYRICS,
-        artist: 'WorshipVerse Originals',
       },
     })
   }

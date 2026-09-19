@@ -1,4 +1,4 @@
-import pdf from 'pdf-parse'
+import { PDFParse } from 'pdf-parse'
 import { normalizeTitle } from '@/lib/songs'
 import { validateSongInput } from '@/lib/validation'
 
@@ -20,7 +20,9 @@ export type PdfPreview = {
 }
 
 function cleanLine(line: string) {
-  return line.replace(/\s+$/g, '').replace(/^\s+/g, '').replace(/^\d+\s*$/, '')
+  const cleaned = line.replace(/\s+$/g, '').replace(/^\s+/g, '')
+  if (/^(?:--\s*)?\d+\s+of\s+\d+(?:\s*--)?$/i.test(cleaned)) return ''
+  return cleaned.replace(/^\d+\s*$/, '')
 }
 
 function cleanText(text: string) {
@@ -56,7 +58,9 @@ function toSong(chunk: string, index: number): PdfPreviewSong {
 
 export async function parseSongsPdf(buffer: Buffer): Promise<{ preview?: PdfPreview; error?: string }> {
   try {
-    const result = await pdf(buffer)
+    const parser = new PDFParse({ data: buffer })
+    const result = await parser.getText()
+    await parser.destroy()
     const text = cleanText(result.text)
     if (!text) {
       return { error: 'This PDF appears to be scanned or image-only. OCR is required before songs can be extracted.' }

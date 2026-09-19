@@ -13,14 +13,21 @@ export async function middleware(request: NextRequest) {
   const token = request.cookies.get(COOKIE_NAME)?.value
   const secret = process.env.AUTH_SECRET
   if (!token || !secret) {
-    return NextResponse.redirect(new URL('/admin/login', request.url))
+    const response = NextResponse.redirect(new URL('/admin/login', request.url))
+    response.headers.set('Cache-Control', 'no-store')
+    return response
   }
 
   try {
-    await jwtVerify(token, new TextEncoder().encode(secret))
-    return NextResponse.next()
+    const { payload } = await jwtVerify(token, new TextEncoder().encode(secret))
+    if (payload.role !== 'admin') throw new Error('Invalid admin role')
+    const response = NextResponse.next()
+    response.headers.set('Cache-Control', 'private, no-store, max-age=0')
+    return response
   } catch {
-    return NextResponse.redirect(new URL('/admin/login', request.url))
+    const response = NextResponse.redirect(new URL('/admin/login', request.url))
+    response.headers.set('Cache-Control', 'no-store')
+    return response
   }
 }
 
